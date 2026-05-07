@@ -40,9 +40,7 @@
         "${workspaceFolder}/scripts/git/repo_tasks.py",
         "switch",
         "--branch",
-        "${input:repoBranchName}",
-        "--remote",
-        "${input:repoSwitchRemoteName}"
+        "${input:repoBranchName}"
       ],
       "windows": {
         "command": "py",
@@ -51,9 +49,7 @@
           "${workspaceFolder}/scripts/git/repo_tasks.py",
           "switch",
           "--branch",
-          "${input:repoBranchName}",
-          "--remote",
-          "${input:repoSwitchRemoteName}"
+          "${input:repoBranchName}"
         ]
       },
       "options": {
@@ -68,7 +64,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "输入分支名称和远程源；切换前自动提交当前改动，本地存在则切换，本地不存在但远程存在则跟踪远程分支并拉取，两者都不存在则创建新本地分支。"
+      "detail": "输入分支名称；切换前自动提交当前改动，本地存在则切换，本地不存在但远程存在则自动检查远程分支并拉取，两者都不存在则创建新本地分支。"
     },
     {
       "label": "仓库：提交当前改动",
@@ -258,12 +254,7 @@
     {
       "id": "repoBranchName",
       "type": "promptString",
-      "description": "输入分支名称；切换前自动提交当前改动，本地存在则切换，本地不存在但远程存在则跟踪远程分支并拉取，两者都不存在则创建新本地分支。"
-    },
-    {
-      "id": "repoSwitchRemoteName",
-      "type": "promptString",
-      "description": "输入切换/创建分支时检查的远程源名称；留空时使用该任务缓存，缓存不存在时回退到当前上游或 origin。"
+      "description": "输入分支名称；切换前自动提交当前改动，本地存在则切换，本地不存在但远程存在则自动检查远程分支并拉取，两者都不存在则创建新本地分支。"
     },
     {
       "id": "repoCommitMessage",
