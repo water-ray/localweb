@@ -30,7 +30,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "显示当前分支、上游、远程仓库和作者信息。"
+      "detail": "按固定标签显示本地分支、远程分支、fetch/push 地址和作者信息；作者信息缺失且已配置远程源时，可通过 gh 登录账号自动补全。"
     },
     {
       "label": "仓库：切换/创建分支",

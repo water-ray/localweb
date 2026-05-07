@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -322,6 +323,10 @@ def git_config(ctx: RepoContext, key: str) -> str:
     return git_stdout(ctx, "config", "--get", key, check=False)
 
 
+def set_git_config(ctx: RepoContext, key: str, value: str) -> None:
+    git(ctx, "config", key, value)
+
+
 def local_branch_exists(ctx: RepoContext, branch_name: str) -> bool:
     result = git(ctx, "show-ref", "--verify", f"refs/heads/{branch_name}", check=False)
     return result.returncode == 0
@@ -506,67 +511,196 @@ def print_section(title: str) -> None:
     log(f"== {title} ==")
 
 
-def print_remotes(ctx: RepoContext) -> None:
-    remotes = remote_map(ctx)
-    upstream = current_upstream(ctx)
+def run_gh_json(*args: str) -> Any:
+    gh_exe = shutil.which("gh")
+    if not gh_exe:
+        raise TaskError("未找到 GitHub CLI：gh")
 
-    print_section("远程仓库")
-    if not remotes:
-        log("未配置任何远程仓库。")
-        log('示例：git remote add origin https://github.com/your-name/your-repo.git')
-        return
+    result = run_process([gh_exe, *args], check=False)
+    if result.returncode != 0:
+        raise TaskError(format_process_error([gh_exe, *args], result))
 
-    for name in sorted(remotes):
-        markers: list[str] = []
-        if upstream and name == upstream.get("remote"):
-            markers.append("当前上游")
+    try:
+        return json.loads(result.stdout or "{}")
+    except json.JSONDecodeError as error:
+        raise TaskError(f"无法解析 gh 输出：{error}") from error
 
-        marker_text = f" [{'、'.join(markers)}]" if markers else ""
-        fetch_url = remotes[name].get("fetch", "未设置")
-        push_url = remotes[name].get("push", fetch_url)
-        log(f"- {name}{marker_text}")
-        log(f"  fetch: {fetch_url}")
-        log(f"  push:  {push_url}")
+
+def run_gh(*args: str) -> subprocess.CompletedProcess[str]:
+    gh_exe = shutil.which("gh")
+    if not gh_exe:
+        raise TaskError("未找到 GitHub CLI：gh")
+    return run_process([gh_exe, *args], check=True)
+
+
+def github_accounts() -> list[dict[str, Any]]:
+    data = run_gh_json("auth", "status", "--hostname", "github.com", "--json", "hosts")
+    host_accounts = data.get("hosts", {}).get("github.com", [])
+    return [
+        account
+        for account in host_accounts
+        if account.get("state") == "success" and account.get("login")
+    ]
+
+
+def choose_github_account(accounts: list[dict[str, Any]]) -> str | None:
+    if not accounts:
+        return None
+    if len(accounts) == 1:
+        return str(accounts[0]["login"])
+
+    print_section("GitHub 账号")
+    log("检测到多个已登录 GitHub 账号，请选择用于设置作者信息的账号：")
+    for index, account in enumerate(accounts, start=1):
+        active_text = "（当前）" if account.get("active") else ""
+        log(f"{index}. {account['login']}{active_text}")
+
+    if not sys.stdin.isatty():
+        log("当前终端不可交互，无法选择 GitHub 账号。", stream=sys.stderr)
+        return None
+
+    try:
+        answer = input(f"[{current_time_text()}] 请输入账号序号或账号名: ").strip()
+    except EOFError:
+        return None
+
+    if not answer:
+        return None
+    if answer.isdigit():
+        index = int(answer)
+        if 1 <= index <= len(accounts):
+            return str(accounts[index - 1]["login"])
+        return None
+
+    login_map = {str(account["login"]).lower(): str(account["login"]) for account in accounts}
+    return login_map.get(answer.lower())
+
+
+def github_user_profile(login: str) -> dict[str, Any]:
+    run_gh("auth", "switch", "--hostname", "github.com", "--user", login)
+    return run_gh_json("api", "user")
+
+
+def github_author_email(profile: dict[str, Any]) -> str:
+    email = str(profile.get("email") or "").strip()
+    if email:
+        return email
+
+    login = str(profile.get("login") or "").strip()
+    user_id = str(profile.get("id") or "").strip()
+    if login and user_id:
+        return f"{user_id}+{login}@users.noreply.github.com"
+    if login:
+        return f"{login}@users.noreply.github.com"
+    return ""
+
+
+def fill_missing_author_from_gh(
+    ctx: RepoContext,
+    author_name: str,
+    author_email: str,
+    has_remote: bool,
+) -> tuple[str, str]:
+    if author_name and author_email:
+        return author_name, author_email
+    if not has_remote:
+        return author_name, author_email
+
+    try:
+        accounts = github_accounts()
+    except TaskError as error:
+        log(f"[作者信息] 无法检查 gh 登录状态：{error}", stream=sys.stderr)
+        return author_name, author_email
+
+    selected_login = choose_github_account(accounts)
+    if not selected_login:
+        log("[作者信息] 未选择 GitHub 账号，跳过自动设置。", stream=sys.stderr)
+        return author_name, author_email
+
+    try:
+        profile = github_user_profile(selected_login)
+    except TaskError as error:
+        log(f"[作者信息] 无法读取 GitHub 账号信息：{error}", stream=sys.stderr)
+        return author_name, author_email
+
+    profile_login = str(profile.get("login") or selected_login).strip()
+    profile_email = github_author_email(profile)
+
+    if not author_name and profile_login:
+        set_git_config(ctx, "user.name", profile_login)
+        author_name = profile_login
+        log(f"[作者信息] 已设置 user.name : {author_name}")
+    if not author_email and profile_email:
+        set_git_config(ctx, "user.email", profile_email)
+        author_email = profile_email
+        log(f"[作者信息] 已设置 user.email: {author_email}")
+
+    return author_name, author_email
+
+
+def remote_display_url(remotes: dict[str, dict[str, str]], remote_name: str) -> str:
+    remote = remotes.get(remote_name, {})
+    return remote.get("fetch") or remote.get("push") or "未设置"
+
+
+def display_width(text: str) -> int:
+    return sum(
+        2 if unicodedata.east_asian_width(char) in {"F", "W"} else 1
+        for char in text
+    )
+
+
+def pad_display(text: str, width: int) -> str:
+    return text + (" " * max(width - display_width(text), 1))
+
+
+def log_status_row(label: str, value: str, detail: str = "") -> None:
+    padded_label = pad_display(label, 12)
+    if detail:
+        log(f"{padded_label}| {pad_display(value, 24)}| {detail}")
+    else:
+        log(f"{padded_label}| {value}")
 
 
 def cmd_status(ctx: RepoContext, _: argparse.Namespace) -> int:
     branch = current_branch(ctx)
     upstream = current_upstream(ctx)
+    remotes = remote_map(ctx)
     author_name = git_config(ctx, "user.name")
     author_email = git_config(ctx, "user.email")
 
-    print_section("仓库信息")
-    log(f"仓库根目录: {ctx.root}")
-    log(f"Git 路径: {ctx.git_exe}")
-
-    print_section("当前分支")
     if branch:
-        log(f"当前分支: {branch}")
+        log_status_row("[本地分支]", branch, str(ctx.root))
     else:
-        log("当前分支: 未检测到（可能处于 detached HEAD 状态）")
+        log_status_row("[本地分支]", "未检测到", f"{ctx.root}（可能处于 detached HEAD 状态）")
 
-    if upstream:
-        log(f"当前上游: {upstream['full']}")
-        if branch:
-            log(f"当前绑定: {branch} -> {upstream['full']}")
+    if not remotes:
+        log_status_row("[远程分支]", '无远程源,使用"仓库：设置远程仓库源"任务设置')
     else:
-        log("当前上游: 未设置")
-        log(f"示例：git push -u origin {branch or '<branch>'}")
+        if upstream and upstream.get("remote"):
+            remote_name = upstream["remote"]
+            remote_url = remote_display_url(remotes, remote_name)
+            log_status_row("[远程分支]", upstream["full"], f"{remote_name}  {remote_url}")
+        else:
+            first_remote = sorted(remotes)[0]
+            remote_url = remote_display_url(remotes, first_remote)
+            log_status_row("[远程分支]", "未绑定", f"{first_remote}  {remote_url}")
 
-    print_remotes(ctx)
+        for name in sorted(remotes):
+            fetch_url = remotes[name].get("fetch", "未设置")
+            push_url = remotes[name].get("push", "未设置")
+            log_status_row("[fetch]", name, fetch_url)
+            log_status_row("[push]", name, push_url)
 
-    print_section("作者信息")
-    if author_name:
-        log(f"user.name : {author_name}")
-    else:
-        log("user.name : 未设置")
-        log('示例：git config --global user.name "Your Name"')
+    author_name, author_email = fill_missing_author_from_gh(
+        ctx,
+        author_name,
+        author_email,
+        bool(remotes),
+    )
 
-    if author_email:
-        log(f"user.email: {author_email}")
-    else:
-        log("user.email: 未设置")
-        log('示例：git config --global user.email "name@example.com"')
+    log_status_row("[作者信息]", "user.name", author_name or "未设置")
+    log_status_row("[作者信息]", "user.email", author_email or "未设置")
 
     return 0
 
@@ -782,7 +916,12 @@ def cmd_set_remote(ctx: RepoContext, args: argparse.Namespace) -> int:
         log(f"已新增远程源：{remote_name} -> {remote_url}")
 
     save_task_cache(ctx, "set-remote", last_remote=remote_name, last_url=remote_url)
-    print_remotes(ctx)
+    remotes = remote_map(ctx)
+    for name in sorted(remotes):
+        fetch_url = remotes[name].get("fetch", "未设置")
+        push_url = remotes[name].get("push", "未设置")
+        log(f"[fetch] {name}  {fetch_url}")
+        log(f"[push] {name}  {push_url}")
     return 0
 
 
