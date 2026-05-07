@@ -3,6 +3,9 @@
   "git.autofetch": false,
   "git.autorefresh": false,
   "git.autoRepositoryDetection": false,
+  "git.openRepositoryInParentFolders": "never",
+  "git.useIntegratedAskPass": false,
+  "git.terminalAuthentication": false,
   "github.gitAuthentication": false,
   "git.confirmSync": true
 }
