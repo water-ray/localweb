@@ -710,6 +710,7 @@ def cmd_switch(ctx: RepoContext, args: argparse.Namespace) -> int:
     if not branch_name:
         raise TaskError("分支名称不能为空。")
     ensure_valid_branch_name(ctx, branch_name)
+    commit_all_changes(ctx, f"切换分支为{branch_name}前的自动提交")
 
     if local_branch_exists(ctx, branch_name):
         git(ctx, "switch", branch_name)
