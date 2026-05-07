@@ -33,7 +33,7 @@ class TaskError(RuntimeError):
 class RepoContext:
     git_exe: str
     root: Path
-    cache_path: Path
+    cache_dir: Path
 
 
 def configure_stdio() -> None:
@@ -213,8 +213,8 @@ def build_repo_context() -> RepoContext:
         raise TaskError("当前目录不是 Git 仓库，无法执行仓库任务。")
 
     root = Path(root_result.stdout.strip()).resolve()
-    cache_path = root / "temp" / "git_task_cache.json"
-    return RepoContext(git_exe=git_exe, root=root, cache_path=cache_path)
+    cache_dir = root / "temp" / "git_tasks"
+    return RepoContext(git_exe=git_exe, root=root, cache_dir=cache_dir)
 
 
 def git(ctx: RepoContext, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
@@ -229,18 +229,25 @@ def git_stdout(ctx: RepoContext, *args: str, check: bool = True) -> str:
     return git(ctx, *args, check=check).stdout.strip()
 
 
-def load_cache(ctx: RepoContext) -> dict[str, Any]:
-    if not ctx.cache_path.exists():
+def task_cache_path(ctx: RepoContext, task_key: str) -> Path:
+    if not re.fullmatch(r"[a-z0-9-]+", task_key):
+        raise TaskError(f"任务缓存名称不合法：{task_key}")
+    return ctx.cache_dir / f"{task_key}.json"
+
+
+def load_task_cache(ctx: RepoContext, task_key: str) -> dict[str, Any]:
+    cache_path = task_cache_path(ctx, task_key)
+    if not cache_path.exists():
         return {}
 
     try:
-        return json.loads(ctx.cache_path.read_text(encoding="utf-8"))
+        return json.loads(cache_path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return {}
 
 
-def save_cache(ctx: RepoContext, **updates: str | None) -> None:
-    cache = load_cache(ctx)
+def save_task_cache(ctx: RepoContext, task_key: str, **updates: str | None) -> None:
+    cache = load_task_cache(ctx, task_key)
     for key, value in updates.items():
         if value is None:
             continue
@@ -248,8 +255,9 @@ def save_cache(ctx: RepoContext, **updates: str | None) -> None:
         if text:
             cache[key] = text
 
-    ctx.cache_path.parent.mkdir(parents=True, exist_ok=True)
-    ctx.cache_path.write_text(
+    cache_path = task_cache_path(ctx, task_key)
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(
         json.dumps(cache, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
@@ -324,15 +332,15 @@ def ensure_remote_exists(ctx: RepoContext, remote_name: str) -> None:
     )
 
 
-def resolve_remote(ctx: RepoContext, explicit_remote: str) -> tuple[str, str]:
+def resolve_remote(ctx: RepoContext, task_key: str, explicit_remote: str) -> tuple[str, str]:
     remote_input = explicit_remote.strip()
     if remote_input:
         return remote_input, "手动输入"
 
-    cache = load_cache(ctx)
+    cache = load_task_cache(ctx, task_key)
     cached_remote = str(cache.get("last_remote", "")).strip()
     if cached_remote:
-        return cached_remote, "缓存"
+        return cached_remote, "当前任务缓存"
 
     upstream = current_upstream(ctx)
     if upstream and upstream.get("remote"):
@@ -341,15 +349,17 @@ def resolve_remote(ctx: RepoContext, explicit_remote: str) -> tuple[str, str]:
     return "origin", "默认值"
 
 
-def resolve_target_branch(ctx: RepoContext, explicit_branch: str) -> tuple[str, str]:
+def resolve_target_branch(
+    ctx: RepoContext, task_key: str, explicit_branch: str
+) -> tuple[str, str]:
     branch_input = explicit_branch.strip()
     if branch_input:
         return branch_input, "手动输入"
 
-    cache = load_cache(ctx)
+    cache = load_task_cache(ctx, task_key)
     cached_branch = str(cache.get("last_branch", "")).strip()
     if cached_branch:
-        return cached_branch, "缓存"
+        return cached_branch, "当前任务缓存"
 
     return ensure_branch(ctx), "当前分支"
 
@@ -390,6 +400,7 @@ def print_completed_process(result: subprocess.CompletedProcess[str]) -> None:
 
 def run_push_with_optional_force(
     ctx: RepoContext,
+    task_key: str,
     push_args: list[str],
     force_push_args: list[str],
     success_message: str,
@@ -401,7 +412,7 @@ def run_push_with_optional_force(
     log("开始执行普通推送...")
     result = git_stream(ctx, *push_args, check=False)
     if result.returncode == 0:
-        save_cache(ctx, last_remote=remote_name, last_branch=branch_name)
+        save_task_cache(ctx, task_key, last_remote=remote_name, last_branch=branch_name)
         log(f"{success_message}，命令耗时 {format_duration(perf_counter() - push_started)}")
         return 0
 
@@ -429,7 +440,7 @@ def run_push_with_optional_force(
             " 详细输出见上方日志。"
         )
 
-    save_cache(ctx, last_remote=remote_name, last_branch=branch_name)
+    save_task_cache(ctx, task_key, last_remote=remote_name, last_branch=branch_name)
     log(
         f"{force_success_message}，命令耗时 {format_duration(perf_counter() - force_started)}"
     )
@@ -444,7 +455,6 @@ def print_section(title: str) -> None:
 def print_remotes(ctx: RepoContext) -> None:
     remotes = remote_map(ctx)
     upstream = current_upstream(ctx)
-    cached_remote = str(load_cache(ctx).get("last_remote", "")).strip()
 
     print_section("远程仓库")
     if not remotes:
@@ -456,8 +466,6 @@ def print_remotes(ctx: RepoContext) -> None:
         markers: list[str] = []
         if upstream and name == upstream.get("remote"):
             markers.append("当前上游")
-        if cached_remote and name == cached_remote:
-            markers.append("最近使用")
 
         marker_text = f" [{'、'.join(markers)}]" if markers else ""
         fetch_url = remotes[name].get("fetch", "未设置")
@@ -521,7 +529,7 @@ def cmd_switch(ctx: RepoContext, args: argparse.Namespace) -> int:
         git(ctx, "switch", "-c", branch_name)
         log(f"已创建并切换到新分支：{branch_name}")
 
-    save_cache(ctx, last_branch=branch_name)
+    save_task_cache(ctx, "switch", last_branch=branch_name)
     return 0
 
 
@@ -547,12 +555,13 @@ def cmd_commit(ctx: RepoContext, args: argparse.Namespace) -> int:
 
 def cmd_push_current(ctx: RepoContext, args: argparse.Namespace) -> int:
     branch_name = ensure_branch(ctx)
-    remote_name, source = resolve_remote(ctx, args.remote)
+    remote_name, source = resolve_remote(ctx, "push-current", args.remote)
     ensure_remote_exists(ctx, remote_name)
 
     log(f"使用远程源: {remote_name}（来源：{source}）")
     return run_push_with_optional_force(
         ctx,
+        "push-current",
         ["push", "-u", remote_name, branch_name],
         ["push", "--force", "-u", remote_name, branch_name],
         f"已推送当前分支到 {remote_name}/{branch_name}",
@@ -563,14 +572,17 @@ def cmd_push_current(ctx: RepoContext, args: argparse.Namespace) -> int:
 
 
 def cmd_push_branch(ctx: RepoContext, args: argparse.Namespace) -> int:
-    remote_name, remote_source = resolve_remote(ctx, args.remote)
+    remote_name, remote_source = resolve_remote(ctx, "push-branch", args.remote)
     ensure_remote_exists(ctx, remote_name)
-    target_branch, branch_source = resolve_target_branch(ctx, args.branch)
+    target_branch, branch_source = resolve_target_branch(
+        ctx, "push-branch", args.branch
+    )
 
     log(f"使用远程源: {remote_name}（来源：{remote_source}）")
     log(f"目标分支: {target_branch}（来源：{branch_source}）")
     return run_push_with_optional_force(
         ctx,
+        "push-branch",
         ["push", remote_name, f"HEAD:{target_branch}"],
         ["push", "--force", remote_name, f"HEAD:{target_branch}"],
         f"已将当前内容推送到 {remote_name}/{target_branch}",
@@ -582,14 +594,14 @@ def cmd_push_branch(ctx: RepoContext, args: argparse.Namespace) -> int:
 
 def cmd_pull_current(ctx: RepoContext, args: argparse.Namespace) -> int:
     branch_name = ensure_branch(ctx)
-    remote_name, source = resolve_remote(ctx, args.remote)
+    remote_name, source = resolve_remote(ctx, "pull-current", args.remote)
     ensure_remote_exists(ctx, remote_name)
 
     log(f"使用远程源: {remote_name}（来源：{source}）")
     pull_started = perf_counter()
     log("开始执行拉取...")
     git_stream(ctx, "pull", remote_name, branch_name)
-    save_cache(ctx, last_remote=remote_name, last_branch=branch_name)
+    save_task_cache(ctx, "pull-current", last_remote=remote_name, last_branch=branch_name)
     log(
         f"已从 {remote_name}/{branch_name} 拉取最新改动，命令耗时 "
         f"{format_duration(perf_counter() - pull_started)}"
@@ -615,7 +627,7 @@ def cmd_set_remote(ctx: RepoContext, args: argparse.Namespace) -> int:
         git(ctx, "remote", "add", remote_name, remote_url)
         log(f"已新增远程源：{remote_name} -> {remote_url}")
 
-    save_cache(ctx, last_remote=remote_name)
+    save_task_cache(ctx, "set-remote", last_remote=remote_name, last_url=remote_url)
     print_remotes(ctx)
     return 0
 

@@ -5,6 +5,7 @@ Thumbs.db
 # IDE
 .idea/
 *.iml
+.vscode/task-history.ndjson
 
 
 # One-click build outputs
