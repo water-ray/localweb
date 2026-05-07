@@ -98,7 +98,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "输入提交说明后，自动暂存并提交当前全部改动。"
+      "detail": "输入提交说明后，自动暂存并提交当前全部改动。 "
     },
     {
       "label": "仓库：推送当前分支",
