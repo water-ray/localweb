@@ -1,0 +1,281 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "仓库：查看当前分支",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "status"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "status"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true,
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "显示当前分支、上游、远程仓库和作者信息。"
+    },
+    {
+      "label": "仓库：切换/创建分支",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "switch",
+        "--branch",
+        "${input:repoBranchName}"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "switch",
+          "--branch",
+          "${input:repoBranchName}"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "输入分支名称；存在则切换，不存在则创建并切换。"
+    },
+    {
+      "label": "仓库：提交当前改动",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "commit",
+        "--message",
+        "${input:repoCommitMessage}"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "commit",
+          "--message",
+          "${input:repoCommitMessage}"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "输入提交说明后，自动暂存并提交当前全部改动。"
+    },
+    {
+      "label": "仓库：推送当前分支",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "push-current",
+        "--remote",
+        "${input:repoRemoteName}"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "push-current",
+          "--remote",
+          "${input:repoRemoteName}"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "输入远程源；留空时复用缓存或回退到当前上游/ origin。若遇到非 fast-forward，可在终端输入 Y/yes 强推。"
+    },
+    {
+      "label": "仓库：推送指定分支",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "push-branch",
+        "--remote",
+        "${input:repoRemoteName}",
+        "--branch",
+        "${input:repoTargetBranch}"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "push-branch",
+          "--remote",
+          "${input:repoRemoteName}",
+          "--branch",
+          "${input:repoTargetBranch}"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true,
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "输入远程源和目标分支；留空时优先复用缓存。若遇到非 fast-forward，可在终端输入 Y/yes 强推。"
+    },
+    {
+      "label": "仓库：拉取当前分支",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "pull-current",
+        "--remote",
+        "${input:repoRemoteName}"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "pull-current",
+          "--remote",
+          "${input:repoRemoteName}"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "输入远程源；留空时复用缓存或回退到当前上游/ origin。"
+    },
+    {
+      "label": "仓库：设置远程仓库源",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/git/repo_tasks.py",
+        "set-remote",
+        "--name",
+        "${input:repoRemoteSetName}",
+        "--url",
+        "${input:repoRemoteSetUrl}"
+      ],
+      "windows": {
+        "command": "py",
+        "args": [
+          "-3",
+          "${workspaceFolder}/scripts/git/repo_tasks.py",
+          "set-remote",
+          "--name",
+          "${input:repoRemoteSetName}",
+          "--url",
+          "${input:repoRemoteSetUrl}"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "输入远程源名称与地址；不存在则新增，已存在则更新绑定。"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "repoBranchName",
+      "type": "promptString",
+      "description": "输入分支名称；本地存在则切换，不存在则创建并切换。"
+    },
+    {
+      "id": "repoCommitMessage",
+      "type": "promptString",
+      "description": "输入提交说明；任务会自动提交当前全部改动。"
+    },
+    {
+      "id": "repoRemoteName",
+      "type": "promptString",
+      "description": "输入远程源名称；留空时使用缓存，缓存不存在时回退到当前上游或 origin。"
+    },
+    {
+      "id": "repoTargetBranch",
+      "type": "promptString",
+      "description": "输入目标远程分支；留空时使用缓存，缓存不存在时使用当前分支。"
+    },
+    {
+      "id": "repoRemoteSetName",
+      "type": "promptString",
+      "description": "输入远程源名称，例如 origin。"
+    },
+    {
+      "id": "repoRemoteSetUrl",
+      "type": "promptString",
+      "description": "输入远程仓库地址，例如 https://github.com/user/repo.git。"
+    }
+  ]
+}

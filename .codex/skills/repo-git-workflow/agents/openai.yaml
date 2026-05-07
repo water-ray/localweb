@@ -1,0 +1,4 @@
+interface:
+  display_name: "仓库 Git 工作流"
+  short_description: "执行提交推送拉取分支切换远程配置和仓库状态检查任务"
+  default_prompt: "Use $repo-git-workflow to inspect, commit, push, pull, or configure the Git repository."
