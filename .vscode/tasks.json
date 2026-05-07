@@ -67,7 +67,7 @@
       "detail": "输入分支名称；存在则切换，不存在则创建并切换。"
     },
     {
-      "label": "仓库：提交当前改动 ",
+      "label": "仓库：提交当前改动",
       "type": "process",
       "command": "python3",
       "args": [

@@ -218,11 +218,19 @@ def build_repo_context() -> RepoContext:
 
 
 def git(ctx: RepoContext, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return run_process([ctx.git_exe, *args], cwd=ctx.root, check=check)
+    return run_process(
+        [ctx.git_exe, "-c", "core.quotepath=false", *args],
+        cwd=ctx.root,
+        check=check,
+    )
 
 
 def git_stream(ctx: RepoContext, *args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
-    return run_streaming_process([ctx.git_exe, *args], cwd=ctx.root, check=check)
+    return run_streaming_process(
+        [ctx.git_exe, "-c", "core.quotepath=false", *args],
+        cwd=ctx.root,
+        check=check,
+    )
 
 
 def git_stdout(ctx: RepoContext, *args: str, check: bool = True) -> str:
