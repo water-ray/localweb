@@ -983,7 +983,7 @@ def cmd_push(ctx: RepoContext, args: argparse.Namespace) -> int:
     current_branch_name = ensure_branch(ctx)
     remote_name, remote_source = require_configured_remote(ctx)
     target_branch = args.branch.strip() or prompt_text(
-        "请输入要推送到的远程分支名称",
+        "请输入远程分支",
         default=current_branch_name,
         required=True,
     )
