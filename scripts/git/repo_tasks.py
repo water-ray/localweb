@@ -1082,13 +1082,73 @@ def cmd_restore_node(ctx: RepoContext, _: argparse.Namespace) -> int:
         return 0
 
 
+def refresh_remote_branch_list(ctx: RepoContext, remote_name: str) -> None:
+    log(f"正在更新远程分支列表：{remote_name}")
+    result = git_stream(ctx, "fetch", "--prune", remote_name, check=False)
+    if result.returncode != 0:
+        log("远程分支列表更新失败，将使用本地已有远程分支缓存。", stream=sys.stderr)
+
+
+def remote_branch_list(ctx: RepoContext, remote_name: str) -> list[str]:
+    output = git_stdout(
+        ctx,
+        "for-each-ref",
+        f"refs/remotes/{remote_name}",
+        "--format=%(refname:strip=3)",
+        check=False,
+    )
+    branches: list[str] = []
+    for line in output.splitlines():
+        branch_name = line.strip()
+        if not branch_name or branch_name == "HEAD":
+            continue
+        branches.append(branch_name)
+    return sorted(unique_preserve_order(branches), key=lambda item: item.lower())
+
+
+def print_remote_branch_options(remote_name: str, branches: list[str]) -> None:
+    print_section(f"远程分支 {remote_name}")
+    if not branches:
+        log("未找到远程分支；可以直接输入新分支名称，推送时会自动创建。")
+        return
+    for index, branch_name in enumerate(branches, start=1):
+        log(f"{index}. {branch_name}")
+    log("输入编号使用对应远程分支；输入文本作为目标分支；直接回车使用当前分支。")
+
+
+def choose_push_target_branch(
+    ctx: RepoContext,
+    remote_name: str,
+    default_branch: str,
+) -> str:
+    refresh_remote_branch_list(ctx, remote_name)
+    branches = remote_branch_list(ctx, remote_name)
+    print_remote_branch_options(remote_name, branches)
+
+    while True:
+        try:
+            answer = input(f"[{current_time_text()}] 请输入远程分支(默认当前分支 {default_branch}): ").strip()
+        except EOFError:
+            return default_branch
+
+        if not answer:
+            return default_branch
+        if answer.isdigit():
+            selected_index = int(answer)
+            if 1 <= selected_index <= len(branches):
+                return branches[selected_index - 1]
+            log("输入编号不在远程分支列表范围内。", stream=sys.stderr)
+            continue
+        return answer
+
+
 def cmd_push(ctx: RepoContext, args: argparse.Namespace) -> int:
     current_branch_name = ensure_branch(ctx)
     remote_name, remote_source = require_configured_remote(ctx)
-    target_branch = args.branch.strip() or prompt_text(
-        "请输入远程分支",
-        default=current_branch_name,
-        required=True,
+    target_branch = args.branch.strip() or choose_push_target_branch(
+        ctx,
+        remote_name,
+        current_branch_name,
     )
     ensure_valid_branch_name(ctx, target_branch)
 
