@@ -799,13 +799,165 @@ def cmd_switch(ctx: RepoContext, args: argparse.Namespace) -> int:
 
 
 def cmd_commit(ctx: RepoContext, args: argparse.Namespace) -> int:
-    message = args.message.strip() or prompt_text("请输入提交说明", required=True)
+    changed = working_tree_status(ctx)
+    if not changed:
+        log("当前没有可提交的改动。")
+        return 0
+
+    suggested_message = print_commit_summary(ctx, changed)
+    message = args.message.strip() or prompt_text(
+        "请输入提交说明，直接回车使用默认说明",
+        default=suggested_message,
+        required=True,
+    )
     commit_all_changes(ctx, message)
     return 0
 
 
+def working_tree_status(ctx: RepoContext) -> str:
+    return git_stdout(ctx, "status", "--short", "--untracked-files=all", check=False)
+
+
+def has_commits(ctx: RepoContext) -> bool:
+    return git(ctx, "rev-parse", "--verify", "HEAD", check=False).returncode == 0
+
+
+def last_commit_summary(ctx: RepoContext) -> str:
+    if not has_commits(ctx):
+        return "无提交记录"
+
+    output = git_stdout(
+        ctx,
+        "log",
+        "-1",
+        "--format=%h%x1f%cd%x1f%s",
+        "--date=format:%Y-%m-%d %H:%M:%S",
+        check=False,
+    )
+    if not output:
+        return "无法读取上次提交信息"
+
+    parts = output.split("\x1f", 2)
+    if len(parts) != 3:
+        return output
+    return f"{parts[0]}  {parts[1]}  {parts[2]}"
+
+
+def status_changed_path(status_line: str) -> str:
+    if len(status_line) <= 3:
+        return status_line.strip()
+
+    path_text = status_line[3:].strip()
+    if " -> " in path_text:
+        path_text = path_text.split(" -> ")[-1].strip()
+    return path_text.strip('"')
+
+
+def semantic_area_for_path(path_text: str) -> str:
+    path = path_text.replace("\\", "/")
+
+    if path == "scripts/git/repo_tasks.py":
+        return "Git 仓库任务脚本"
+    if path == ".vscode/tasks.json":
+        return "VS Code 仓库任务配置"
+    if path.startswith(".vscode/") or path.endswith(".code-workspace"):
+        return "VS Code 工作区配置"
+    if path == ".codex/skills/repo-git-workflow/SKILL.md":
+        return "Git 工作流 skill"
+    if path.startswith(".codex/skills/codex-project-foundation/"):
+        return "项目基础框架 skill"
+    if path.startswith(".codex/skills/codex-skill-generator/"):
+        return "Codex skill 生成规则"
+    if path.startswith(".codex/skills/"):
+        return "Codex skill 文档"
+    if path == "AGENTS.md":
+        return "Codex 项目规则"
+    if path == "README.md" or path.startswith("docs/"):
+        return "项目文档"
+    if path == ".gitignore":
+        return "Git 忽略规则"
+    if path.startswith("scripts/git/"):
+        return "Git 辅助脚本"
+    if path.startswith("scripts/"):
+        return "项目脚本"
+    if path.startswith("Bin/"):
+        return "构建产物目录"
+    if path.startswith("."):
+        return "项目配置"
+    return "项目文件"
+
+
+def unique_preserve_order(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        result.append(value)
+    return result
+
+
+def join_chinese_items(items: list[str]) -> str:
+    if not items:
+        return "项目改动"
+    if len(items) == 1:
+        return items[0]
+    final_separator = "和 " if items[-1][:1].isascii() else "和"
+    if len(items) == 2:
+        return f"{items[0]}{final_separator}{items[1]}"
+    if len(items) == 3:
+        return f"{items[0]}、{items[1]}{final_separator}{items[2]}"
+    return f"{items[0]}、{items[1]}{final_separator}{items[2]}等{len(items)}类内容"
+
+
+def change_verb(status_lines: list[str]) -> str:
+    status_text = "".join(line[:2] for line in status_lines)
+    has_added = "A" in status_text or "?" in status_text
+    has_deleted = "D" in status_text
+    has_renamed = "R" in status_text
+    has_modified = any(marker in status_text for marker in ("M", "T", "U"))
+
+    if has_deleted and not (has_added or has_modified or has_renamed):
+        return "清理"
+    if has_added and not (has_deleted or has_modified or has_renamed):
+        return "新增"
+    if has_renamed or (has_added and has_deleted):
+        return "调整"
+    return "更新"
+
+
+def suggested_commit_message(status_text: str) -> str:
+    status_lines = [line for line in status_text.splitlines() if line.strip()]
+    areas = unique_preserve_order(
+        [semantic_area_for_path(status_changed_path(line)) for line in status_lines]
+    )
+    area_text = join_chinese_items(areas)
+    separator = " " if area_text[:1].isascii() else ""
+    return f"{change_verb(status_lines)}{separator}{area_text}"
+
+
+def print_commit_summary(ctx: RepoContext, status_text: str) -> str:
+    suggested_message = suggested_commit_message(status_text)
+    diff_stat = git_stdout(ctx, "diff", "--stat", "HEAD", "--", check=False) if has_commits(ctx) else ""
+
+    print_section("上次提交")
+    log(last_commit_summary(ctx))
+
+    print_section("本次改动")
+    log(status_text)
+
+    if diff_stat:
+        print_section("改动统计")
+        log(diff_stat)
+
+    print_section("默认提交说明")
+    log(suggested_message)
+    return suggested_message
+
+
 def commit_all_changes(ctx: RepoContext, message: str) -> bool:
-    changed = git_stdout(ctx, "status", "--short", check=False)
+    changed = working_tree_status(ctx)
     if not changed:
         log("当前没有可提交的改动。")
         return False
@@ -813,7 +965,7 @@ def commit_all_changes(ctx: RepoContext, message: str) -> bool:
     git(ctx, "add", "-A")
 
     print_section("即将提交的改动")
-    log(git_stdout(ctx, "status", "--short", check=False) or "无")
+    log(working_tree_status(ctx) or "无")
 
     result = git(ctx, "commit", "-m", message)
     log(result.stdout.strip() or "提交完成。")
