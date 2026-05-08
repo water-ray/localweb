@@ -106,18 +106,14 @@
       "command": "python3",
       "args": [
         "${workspaceFolder}/scripts/git/repo_tasks.py",
-        "push-current",
-        "--remote",
-        "${input:repoPushCurrentRemoteName}"
+        "push-current"
       ],
       "windows": {
         "command": "py",
         "args": [
           "-3",
           "${workspaceFolder}/scripts/git/repo_tasks.py",
-          "push-current",
-          "--remote",
-          "${input:repoPushCurrentRemoteName}"
+          "push-current"
         ]
       },
       "options": {
@@ -132,7 +128,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "输入远程源；留空时复用“推送当前分支”任务缓存或回退到当前上游/ origin。若遇到非 fast-forward，会显示本地/远程提交差异，再输入 Y/yes 确认强推。"
+      "detail": "使用当前仓库默认远程源推送当前分支；默认远程源由“仓库：设置远程仓库源”任务写入。若遇到非 fast-forward，会显示本地/远程提交差异，再输入 Y/yes 确认强推。"
     },
     {
       "label": "仓库：推送指定分支",
@@ -141,8 +137,6 @@
       "args": [
         "${workspaceFolder}/scripts/git/repo_tasks.py",
         "push-branch",
-        "--remote",
-        "${input:repoPushBranchRemoteName}",
         "--branch",
         "${input:repoPushBranchTargetBranch}"
       ],
@@ -152,8 +146,6 @@
           "-3",
           "${workspaceFolder}/scripts/git/repo_tasks.py",
           "push-branch",
-          "--remote",
-          "${input:repoPushBranchRemoteName}",
           "--branch",
           "${input:repoPushBranchTargetBranch}"
         ]
@@ -171,7 +163,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "输入远程源和目标分支；留空时优先复用“推送指定分支”任务缓存。若遇到非 fast-forward，可在终端输入 Y/yes 强推。"
+      "detail": "输入目标分支，使用当前仓库默认远程源推送；目标分支留空时复用该任务缓存或当前分支。若遇到非 fast-forward，可在终端输入 Y/yes 强推。"
     },
     {
       "label": "仓库：拉取远程分支",
@@ -180,8 +172,6 @@
       "args": [
         "${workspaceFolder}/scripts/git/repo_tasks.py",
         "pull-remote",
-        "--remote",
-        "${input:repoPullRemoteRemoteName}",
         "--branch",
         "${input:repoPullRemoteBranchName}"
       ],
@@ -191,8 +181,6 @@
           "-3",
           "${workspaceFolder}/scripts/git/repo_tasks.py",
           "pull-remote",
-          "--remote",
-          "${input:repoPullRemoteRemoteName}",
           "--branch",
           "${input:repoPullRemoteBranchName}"
         ]
@@ -209,7 +197,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "输入远程源和远程分支；先自动提交本地改动，再检查远程分支，同名分支优先合并，冲突或分支不同则确认后覆盖拉取。"
+      "detail": "输入远程分支，使用当前仓库默认远程源拉取；远程分支留空时复用该任务缓存。先自动提交本地改动，再检查远程分支，同名分支优先合并，冲突或分支不同则确认后覆盖拉取。"
     },
     {
       "label": "仓库：设置远程仓库源",
@@ -247,7 +235,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "输入远程源名称与地址；不存在则新增，已存在则更新绑定。"
+      "detail": "输入远程源名称与地址；不存在则新增，已存在则更新绑定，并设置为当前仓库默认远程源。"
     }
   ],
   "inputs": [
@@ -262,29 +250,14 @@
       "description": "输入提交说明；任务会自动提交当前全部改动。"
     },
     {
-      "id": "repoPushCurrentRemoteName",
-      "type": "promptString",
-      "description": "输入推送当前分支使用的远程源名称；留空时使用该任务缓存，缓存不存在时回退到当前上游或 origin。"
-    },
-    {
-      "id": "repoPushBranchRemoteName",
-      "type": "promptString",
-      "description": "输入推送指定分支使用的远程源名称；留空时使用该任务缓存，缓存不存在时回退到当前上游或 origin。"
-    },
-    {
       "id": "repoPushBranchTargetBranch",
       "type": "promptString",
       "description": "输入推送指定分支的目标远程分支；留空时使用该任务缓存，缓存不存在时使用当前分支。"
     },
     {
-      "id": "repoPullRemoteRemoteName",
-      "type": "promptString",
-      "description": "输入要拉取的远程源名称，例如 origin。"
-    },
-    {
       "id": "repoPullRemoteBranchName",
       "type": "promptString",
-      "description": "输入要拉取的远程分支名称，例如 main 或 feature/demo。"
+      "description": "输入要拉取的远程分支名称，例如 main 或 feature/demo；留空时使用 temp/git_tasks/pull-remote.json 中的该任务缓存。"
     },
     {
       "id": "repoRemoteSetName",
