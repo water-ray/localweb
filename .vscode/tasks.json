@@ -67,13 +67,15 @@
       "command": "python3",
       "args": [
         "${workspaceFolder}/scripts/git/repo_tasks.py",
-        "pull-remote"
+        "pull-remote",
+        "--yes"
       ],
       "windows": {
         "command": "python",
         "args": [
           "${workspaceFolder}/scripts/git/repo_tasks.py",
-          "pull-remote"
+          "pull-remote",
+          "--yes"
         ]
       },
       "options": {
@@ -89,7 +91,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "在终端输入远程分支；未设置远程源时提示先设置。先自动提交本地改动，同名分支优先合并，失败或分支不同则确认后覆盖拉取。"
+      "detail": "在终端输入远程分支；未设置远程源时提示先设置。任务模式会自动提交本地改动，同名分支优先合并，失败或分支不同则确认后覆盖拉取。"
     },
     {
       "label": "仓库：本地-[切换] 🌿",
@@ -97,13 +99,15 @@
       "command": "python3",
       "args": [
         "${workspaceFolder}/scripts/git/repo_tasks.py",
-        "switch"
+        "switch",
+        "--yes"
       ],
       "windows": {
         "command": "python",
         "args": [
           "${workspaceFolder}/scripts/git/repo_tasks.py",
-          "switch"
+          "switch",
+          "--yes"
         ]
       },
       "options": {
@@ -119,7 +123,7 @@
         "reevaluateOnRerun": true
       },
       "problemMatcher": [],
-      "detail": "有远程源时先列出远程分支，无远程源时列出本地分支；输入编号选择分支，输入文本作为分支名。切换前自动提交当前改动。"
+      "detail": "有远程源时先列出远程分支，无远程源时列出本地分支；输入编号选择分支，输入文本作为分支名。任务模式会在切换前自动提交当前改动。"
     },
     {
       "label": "仓库：本地-[提交] 📝",

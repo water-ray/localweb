@@ -11,6 +11,8 @@
   - `scripts/dev/`
   - `scripts/release/`
   - `scripts/tools/`
+  - `scripts/validate/`
+  - `scripts/project/`
 
 ## 约定
 
@@ -24,3 +26,9 @@
   - 作为 `.vscode/tasks.json` 中仓库任务的统一入口。
   - 提供分支查看、切换/创建、提交、推送、拉取远程分支和远程源设置等功能。
   - 推送和拉取任务支持时间显示、实时输出，以及必要时的交互确认。
+- `scripts/git/test_repo_tasks.py`
+  - 使用临时 Git 仓库验证仓库任务脚本的关键路径。
+- `scripts/validate/check_project_rules.py`
+  - 检查基础文件、任务 JSON、skill frontmatter、skill 命名和 agent prompt 引用。
+- `scripts/project/init_project.py`
+  - 从当前仓库复制基础规则框架到目标目录，并可生成项目 skill 骨架。

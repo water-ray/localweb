@@ -18,9 +18,16 @@
 1. 复制 `AGENTS.md`、`.codex/skills/`、`docs/`、`scripts/`、`.vscode/tasks.json` 和 `.gitignore`。
 2. 按新项目技术栈添加源码、配置和测试目录。
 3. 使用 `codex-skill-generator` 为新项目生成项目 skill。
-4. 对稳定功能域继续生成独立功能 skill。
-5. 按项目需要自由改写根目录 `README.md`，但不要把 README 作为开发规范唯一来源。
-6. 如果需要跨项目或跨设备全局触发，把对应 skill 目录同步到 `$CODEX_HOME/skills/`。
+4. 在项目 skill 中记录技术栈；未确认时写“待确认”，确认后补充语言、框架、包管理器、运行/构建/测试命令。
+5. 对稳定功能域继续生成独立功能 skill。
+6. 按项目需要自由改写根目录 `README.md`，但不要把 README 作为开发规范唯一来源。
+7. 如果需要跨项目或跨设备全局触发，把对应 skill 目录同步到 `$CODEX_HOME/skills/`。
+
+可用初始化脚本：
+
+```powershell
+python scripts/project/init_project.py <目标目录> --project-name "<项目名>" --project-slug <project-slug>
+```
 
 ## 添加子项目或功能
 
@@ -43,4 +50,10 @@
 
 ```powershell
 python "$env:USERPROFILE\.codex\skills\.system\skill-creator\scripts\quick_validate.py" ".codex\skills\<skill-name>"
+```
+
+检查当前框架：
+
+```powershell
+python scripts/validate/check_project_rules.py
 ```

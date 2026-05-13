@@ -9,7 +9,8 @@ Thumbs.db
 
 
 # One-click build outputs
-Bin/
+Bin/*
+!Bin/.gitkeep
 
 
 # Common cache artifacts
@@ -87,6 +88,8 @@ out/
 # .NET
 .vs/
 bin/
+!Bin/
+!Bin/.gitkeep
 obj/
 TestResults/
 *.rsuser
@@ -105,6 +108,7 @@ cypress/screenshots/
 cypress/videos/
 
 # Local temp artifacts
-temp/
+temp/*
+!temp/.gitkeep
 temps/
 tmp/

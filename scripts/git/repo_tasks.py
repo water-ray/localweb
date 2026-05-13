@@ -783,7 +783,11 @@ def cmd_switch(ctx: RepoContext, args: argparse.Namespace) -> int:
         current_branch_name,
     )
     ensure_valid_branch_name(ctx, branch_name)
-    commit_all_changes(ctx, f"切换分支为{branch_name}前的自动提交")
+    auto_commit_changes(
+        ctx,
+        f"切换分支为{branch_name}前的自动提交",
+        assume_yes=args.yes,
+    )
 
     if not remote:
         if local_branch_exists(ctx, branch_name):
@@ -922,6 +926,12 @@ def semantic_area_for_path(path_text: str) -> str:
 
     if path == "scripts/git/repo_tasks.py":
         return "Git 仓库任务脚本"
+    if path == "scripts/git/test_repo_tasks.py":
+        return "Git 仓库任务测试"
+    if path.startswith("scripts/validate/"):
+        return "项目规则校验脚本"
+    if path.startswith("scripts/project/"):
+        return "项目初始化脚本"
     if path == ".vscode/tasks.json":
         return "VS Code 仓库任务配置"
     if path.startswith(".vscode/") or path.endswith(".code-workspace"):
@@ -940,6 +950,8 @@ def semantic_area_for_path(path_text: str) -> str:
         return "项目文档"
     if path == ".gitignore":
         return "Git 忽略规则"
+    if path == ".gitattributes":
+        return "Git 换行规则"
     if path.startswith("scripts/git/"):
         return "Git 辅助脚本"
     if path.startswith("scripts/"):
@@ -1034,6 +1046,32 @@ def commit_all_changes(ctx: RepoContext, message: str) -> bool:
     result = git(ctx, "commit", "-m", message)
     log(result.stdout.strip() or "提交完成。")
     return True
+
+
+def auto_commit_changes(ctx: RepoContext, message: str, *, assume_yes: bool) -> bool:
+    changed = working_tree_status(ctx)
+    if not changed:
+        log("当前没有可提交的改动。")
+        return False
+
+    print_section("自动提交确认")
+    log("执行该任务前需要先提交当前本地改动。")
+    log(f"提交说明: {message}")
+    log(changed)
+
+    if not assume_yes:
+        if not sys.stdin.isatty():
+            raise TaskError("当前终端不可交互，无法确认自动提交；如已确认风险，可添加 --yes。")
+        try:
+            answer = input(f"[{current_time_text()}] 是否自动提交当前改动？Y确认(默认取消): ").strip().lower()
+        except EOFError:
+            answer = ""
+        if answer not in {"y", "yes"}:
+            raise TaskError("已取消自动提交，任务未继续执行。")
+    else:
+        log("已通过 --yes 跳过自动提交确认。")
+
+    return commit_all_changes(ctx, message)
 
 
 def escape_log_message(message: str) -> str:
@@ -1287,7 +1325,11 @@ def cmd_pull_remote(ctx: RepoContext, args: argparse.Namespace) -> int:
 
     log(f"使用远程源: {remote_name}（来源：{remote_source}）")
     log(f"目标远程分支: {branch_name}")
-    commit_all_changes(ctx, f"拉取远程分支{remote_name}/{branch_name}前的自动提交")
+    auto_commit_changes(
+        ctx,
+        f"拉取远程分支{remote_name}/{branch_name}前的自动提交",
+        assume_yes=args.yes,
+    )
 
     pull_started = perf_counter()
     log(f"正在检查远程分支是否存在：{remote_name}/{branch_name}")
@@ -1387,6 +1429,11 @@ def build_parser() -> argparse.ArgumentParser:
         "switch", help="Switch to an existing branch or create it."
     )
     switch_parser.add_argument("--branch", default="")
+    switch_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation before the pre-switch automatic commit.",
+    )
     switch_parser.set_defaults(handler=cmd_switch)
 
     commit_parser = subparsers.add_parser(
@@ -1405,6 +1452,11 @@ def build_parser() -> argparse.ArgumentParser:
         "pull-remote", help="Pull a remote branch with merge or confirmed overwrite."
     )
     pull_remote_parser.add_argument("--branch", default="")
+    pull_remote_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip confirmation before the pre-pull automatic commit.",
+    )
     pull_remote_parser.set_defaults(handler=cmd_pull_remote)
 
     set_remote_parser = subparsers.add_parser(
