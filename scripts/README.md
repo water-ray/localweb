@@ -23,9 +23,10 @@
 ## 当前脚本能力
 
 - `scripts/build/build_localweb.py`
-  - 创建 `Bin/localweb/` 输出目录，并调用 `go build` 交叉编译 Ubuntu/Linux amd64 版本 LocalWeb。
-  - 输出 `Bin/localweb/localweb`。
-  - 同步复制根目录 `config.example.json` 到 `Bin/localweb/config.example.json`。
+  - 编译 Windows amd64 和 Linux amd64 版本 LocalWeb。
+  - 为每个平台创建独立的 `Bin/localweb-{os}-{arch}/` 目录。
+  - 输出 `Bin/localweb-windows-amd64/localweb.exe` 和 `Bin/localweb-linux-amd64/localweb`。
+  - 自动复制 `config.example.json` 到各输出目录。
 - `scripts/git/repo_tasks.py`
   - 作为 `.vscode/tasks.json` 中仓库任务的统一入口。
   - 提供分支查看、切换/创建、提交、推送、拉取远程分支和远程源设置等功能。
