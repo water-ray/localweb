@@ -1,6 +1,6 @@
 # localweb
 
-`localweb` 是一个使用 Go 开发的轻量级 Web 认证转发网关。它运行在服务器的公开 HTTP 端口上，为只监听 `127.0.0.1:<port>` 的本机 Docker Web 服务增加一层路径级密码认证，并在认证成功后通过 JWT 缓存登录状态。
+`localweb` 是一个使用 Go 开发的轻量级 Web 认证转发网关。它运行在服务器的公开 HTTP 端口上，为只监听 `127.0.0.1:<port>` 的本机 Docker Web 服务增加一层路由级认证和密码保护。
 
 项目基于 `work_codex` 基础框架初始化，开发规则、脚本和项目内 skill 仍保留在 `AGENTS.md`、`.codex/skills/`、`docs/` 和 `scripts/` 中。
 
@@ -15,7 +15,7 @@
 
 ## 配置文件
 
-程序启动时读取 `config.json`。推荐使用 `routers` 数组；程序也兼容用户草案中的 `router` 数组别名。推荐使用 `http_headers` 对象；程序也兼容旧式 `httpheader` 字段。
+程序启动时读取 `config.json`。推荐使用 `routers` 数组；程序也兼容用户草案中的 `router` 数组别名。推荐使用 `http_headers` 对象；程序也兼容旧式 `httpheaders` 别名。
 
 最小配置示例：
 
@@ -132,7 +132,7 @@
 
 - 普通 HTTP 请求：每个请求进入路由前验证 JWT。
 - WebSocket、SSE、长轮询：在 Upgrade 或长连接建立前验证一次 JWT，验证通过后持续转发该连接的数据直到关闭。
-- 如果未来需要“认证后纯 TCP 隧道”模式，应作为独立功能设计，例如 CONNECT 隧道或 WebSocket 隧道；该模式不适合当前按路径代理多个 Web 服务的设计。
+- 如果未来需要"认证后纯 TCP 隧道"模式，应作为独立功能设计，例如 CONNECT 隧道或 WebSocket 隧道；该模式不适合当前按路径代理多个 Web 服务的设计。
 
 ## 路由规则
 
@@ -184,21 +184,42 @@ go run ./cmd/localweb -config config.json
 go test ./...
 ```
 
-发布编译 Ubuntu/Linux amd64：
+编译所有平台（Windows + Linux amd64）：
 
 ```powershell
 python scripts/build/build_localweb.py
 ```
 
-VS Code 任务 `发布：编译LocalWeb` 会设置 `GOOS=linux`、`GOARCH=amd64`、`CGO_ENABLED=0`，编译 `Bin/localweb/localweb`，并把 `config.example.json` 一起复制到 `Bin/localweb/`。
+编译输出结构：
 
-等价 Go 命令：
+```
+Bin/
+├─ localweb-windows-amd64/
+│  ├─ localweb.exe
+│  └─ config.example.json
+└─ localweb-linux-amd64/
+   ├─ localweb
+   └─ config.example.json
+```
+
+VS Code 任务 `发布：编译LocalWeb` 会调用编译脚本，编译 Windows 和 Linux 版本，并自动复制 `config.example.json` 到各输出目录。
+
+等价 Go 命令（Linux）：
 
 ```powershell
 $env:GOOS = "linux"
 $env:GOARCH = "amd64"
 $env:CGO_ENABLED = "0"
-go build -o Bin/localweb/localweb ./cmd/localweb
+go build -o Bin/localweb-linux-amd64/localweb ./cmd/localweb
+```
+
+等价 Go 命令（Windows）：
+
+```powershell
+$env:GOOS = "windows"
+$env:GOARCH = "amd64"
+$env:CGO_ENABLED = "0"
+go build -o Bin/localweb-windows-amd64/localweb.exe ./cmd/localweb
 ```
 
 ## 当前能力
@@ -212,6 +233,7 @@ go build -o Bin/localweb/localweb ./cmd/localweb
 - 已支持 WebSocket Upgrade 转发。
 - 已实现登录限流、基础错误处理和代理错误日志。
 - 已增加配置解析、JWT、路由匹配和登录代理流程测试。
+- 已实现跨平台编译，支持 Windows 和 Linux amd64 版本。
 
 ## 后续计划
 
