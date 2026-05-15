@@ -2,6 +2,38 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "发布：编译LocalWeb",
+      "type": "process",
+      "command": "python3",
+      "args": [
+        "${workspaceFolder}/scripts/build/build_localweb.py"
+      ],
+      "windows": {
+        "command": "python",
+        "args": [
+          "${workspaceFolder}/scripts/build/build_localweb.py"
+        ]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared",
+        "focus": true,
+        "clear": true
+      },
+      "runOptions": {
+        "reevaluateOnRerun": true
+      },
+      "problemMatcher": [],
+      "detail": "创建 Bin/localweb 目录，交叉编译 Ubuntu/Linux amd64 版本 LocalWeb，并复制 config.example.json。"
+    },
+    {
       "label": "仓库：分支-[查看] 🔎",
       "type": "process",
       "command": "python3",

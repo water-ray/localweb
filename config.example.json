@@ -1,0 +1,34 @@
+{
+  "bind_host": "0.0.0.0",
+  "port": 80,
+  "jwt": {
+    "secret": "please-change-this-secret",
+    "ttl_seconds": 604800,
+    "cookie_name": "localweb_token",
+    "issuer": "localweb"
+  },
+  "security": {
+    "login_path": "/_localweb/login",
+    "cookie_secure": false,
+    "cookie_same_site": "Lax",
+    "rate_limit_per_minute": 30
+  },
+  "routers": [
+    {
+      "name": "app-abc1",
+      "path": "/abc1",
+      "target_host": "127.0.0.1",
+      "port": 10203,
+      "password": "123456",
+      "strip_path_prefix": true,
+      "force_trailing_slash": true,
+      "rewrite_redirects": true,
+      "rewrite_cookie_path": true,
+      "websocket": true,
+      "timeout_seconds": 60,
+      "http_headers": {
+        "X-Forwarded-Proto": "http"
+      }
+    }
+  ]
+}

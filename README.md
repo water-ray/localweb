@@ -1,105 +1,229 @@
-# work_codex
+# localweb
 
-用于派生其他新项目的基础 AI 规则与 Codex skill 框架。
+`localweb` 是一个使用 Go 开发的轻量级 Web 认证转发网关。它运行在服务器的公开 HTTP 端口上，为只监听 `127.0.0.1:<port>` 的本机 Docker Web 服务增加一层路径级密码认证，并在认证成功后通过 JWT 缓存登录状态。
 
-## 仓库目标
+项目基于 `work_codex` 基础框架初始化，开发规则、脚本和项目内 skill 仍保留在 `AGENTS.md`、`.codex/skills/`、`docs/` 和 `scripts/` 中。
 
-- 提供可直接复用的 AI 开发规则入口。
-- 提供项目内 `.codex/skills/` 源目录，方便迁移到新设备、新项目或子项目。
-- 提供适合新项目初始化的基础忽略配置和 Git/GitHub 仓库任务。
-- 统一新项目的目录布局、执行边界、命名规范和 skill 沉淀方式。
-- 让派生项目可以自由改写根目录 `README.md`，同时把开发规范保留在 `AGENTS.md` 和 `.codex/skills/` 中。
+## 项目目标
 
-## 当前内容
+- 对外只暴露一个 HTTP 服务，例如 `0.0.0.0:80`。
+- 按路径转发本机服务，例如 `/abc1` 转发到 `127.0.0.1:10203`。
+- 每个转发路径可配置独立访问密码。
+- 认证成功后签发 JWT，并通过 HttpOnly Cookie 缓存登录状态。
+- 后端 Docker 应用只监听本机地址，不直接对公网开放。
+- 支持常规 HTTP 请求，并预留 WebSocket、SSE 和长轮询转发能力。
 
-- `AGENTS.md`：Codex 始终生效的项目规则。
-- `.codex/skills/codex-project-foundation/`：项目基础框架维护 skill。
-- `.codex/skills/codex-skill-generator/`：项目 skill、功能 skill 和任务 skill 生成 skill。
-- `.codex/skills/repo-git-workflow/`：Git/GitHub 查看、远程绑定、拉取、切换、提交、推送和节点还原工作流 skill。
-- `.vscode/tasks.json`：内置 VS Code 仓库任务定义。
-- `scripts/git/repo_tasks.py`：仓库任务统一 Python 入口脚本。
-- `scripts/validate/check_project_rules.py`：规则与 skill 框架校验脚本。
-- `scripts/project/init_project.py`：从本仓库派生新项目的初始化脚本。
-- `.gitignore`：常见缓存、构建产物和临时目录忽略规则。
-- `.gitattributes`：Markdown、Python、JSON、YAML 等文本文件的换行规则。
+## 配置文件
 
-## 推荐项目结构
+程序启动时读取 `config.json`。推荐使用 `routers` 数组；程序也兼容用户草案中的 `router` 数组别名。推荐使用 `http_headers` 对象；程序也兼容旧式 `httpheader` 字段。
+
+最小配置示例：
+
+```json
+{
+  "port": 80,
+  "jwt": {
+    "secret": "please-change-this-secret",
+    "ttl_seconds": 604800,
+    "cookie_name": "localweb_token"
+  },
+  "routers": [
+    {
+      "path": "/abc1",
+      "port": 10203,
+      "password": "123456",
+      "http_headers": {}
+    },
+    {
+      "path": "/abc2",
+      "port": 10204,
+      "password": "123456",
+      "http_headers": {}
+    }
+  ]
+}
+```
+
+推荐配置示例：
+
+```json
+{
+  "bind_host": "0.0.0.0",
+  "port": 80,
+  "jwt": {
+    "secret": "please-change-this-secret",
+    "ttl_seconds": 604800,
+    "cookie_name": "localweb_token",
+    "issuer": "localweb"
+  },
+  "security": {
+    "login_path": "/_localweb/login",
+    "cookie_secure": false,
+    "cookie_same_site": "Lax",
+    "rate_limit_per_minute": 30
+  },
+  "routers": [
+    {
+      "name": "app-abc1",
+      "path": "/abc1",
+      "target_host": "127.0.0.1",
+      "port": 10203,
+      "password": "123456",
+      "strip_path_prefix": true,
+      "force_trailing_slash": true,
+      "rewrite_redirects": true,
+      "rewrite_cookie_path": true,
+      "websocket": true,
+      "timeout_seconds": 60,
+      "http_headers": {
+        "X-Forwarded-Proto": "http"
+      }
+    }
+  ]
+}
+```
+
+字段说明：
+
+- `bind_host`：监听地址，默认可设为 `0.0.0.0`。
+- `port`：对外 HTTP 监听端口。Linux 下直接监听 `80` 端口可能需要 root 权限或 `CAP_NET_BIND_SERVICE`。
+- `jwt.secret`：JWT 签名密钥，生产环境必须使用高强度随机值，后续可支持环境变量覆盖。
+- `jwt.secret_env`：可选，从环境变量读取 JWT 签名密钥；配置后优先于 `jwt.secret`。
+- `jwt.ttl_seconds`：登录有效期，默认建议 7 天。
+- `security.cookie_secure`：使用 HTTPS 时应设为 `true`。
+- `security.cookie_same_site`：Cookie SameSite 策略，支持 `Lax`、`Strict`、`None`。
+- `security.rate_limit_per_minute`：登录接口限流，避免密码暴力尝试。
+- `routers[].path`：公网访问路径前缀，必须以 `/` 开头。
+- `routers[].target_host`：目标服务地址，默认 `127.0.0.1`。
+- `routers[].port`：目标本机服务端口。
+- `routers[].password`：当前路径访问密码。
+- `routers[].password_env`：可选，从环境变量读取当前路径访问密码；配置后优先于 `password`。
+- `routers[].password_sha256`：可选，使用密码的 SHA-256 十六进制摘要验证，避免明文密码直接落盘。
+- `routers[].strip_path_prefix`：是否去掉路径前缀再转发。若为 `true`，`/abc1/api` 会转发为后端的 `/api`。
+- `routers[].force_trailing_slash`：访问 `/abc1` 时自动跳到 `/abc1/`，避免相对资源被浏览器解析到站点根路径。默认开启。
+- `routers[].rewrite_redirects`：把后端返回的 `Location: /xxx` 改写为 `Location: /abc1/xxx`。默认开启。
+- `routers[].rewrite_cookie_path`：把后端 `Set-Cookie` 中的 `Path=/` 改写为当前路由路径。默认开启。
+- `routers[].websocket`：是否允许 WebSocket Upgrade。未配置时默认允许。
+- `routers[].http_headers`：转发到后端时追加或覆盖的请求头。
+
+## 认证与转发流程
+
+1. 用户访问 `/abc1` 或 `/abc1/...`。
+2. 网关查找匹配的路由配置。
+3. 如果请求没有携带有效 JWT，返回登录页面或跳转到 `security.login_path`。
+4. 用户提交当前路径对应的密码。
+5. 密码验证通过后，网关签发 JWT，JWT 中记录 `route_path`、签发时间和过期时间。
+6. JWT 写入 HttpOnly Cookie，Cookie Path 建议设置为对应路由路径，例如 `/abc1`。
+7. 后续访问同一路径时先验证 JWT，再反向代理到 `http://127.0.0.1:<port>`。
+8. JWT 的 `route_path` 必须和当前路由匹配，避免 `/abc1` 的登录态被复用于 `/abc2`。
+
+## 关于 JWT 和 TCP 连接
+
+本项目建议按 HTTP 反向代理实现，不建议只在首次 TCP 连接上认证一次。
+
+原因：
+
+- 路径 `/abc1`、`/abc2` 属于 HTTP 请求信息，TCP 握手阶段看不到路径。
+- HTTP/1.1 keep-alive 下，一个 TCP 连接可以连续发送多个 HTTP 请求，甚至可能访问不同路径。
+- HTTP/2 下，一个 TCP 连接可以并发多条 stream，按 TCP 连接授权会混淆请求边界。
+- 反向代理通常会维护两段连接：客户端到网关、网关到本机服务。认证通过后，网关仍需要负责数据中转，而不是把原始 TCP 连接直接交给后端服务。
+
+建议策略：
+
+- 普通 HTTP 请求：每个请求进入路由前验证 JWT。
+- WebSocket、SSE、长轮询：在 Upgrade 或长连接建立前验证一次 JWT，验证通过后持续转发该连接的数据直到关闭。
+- 如果未来需要“认证后纯 TCP 隧道”模式，应作为独立功能设计，例如 CONNECT 隧道或 WebSocket 隧道；该模式不适合当前按路径代理多个 Web 服务的设计。
+
+## 路由规则
+
+- 路由按最长路径前缀匹配，避免 `/abc` 抢先匹配 `/abc1`。
+- `/abc1` 只能匹配 `/abc1` 和 `/abc1/...`，不能匹配 `/abc123`。
+- 启动时会校验重复路径、非法路径、非法端口、空 JWT 密钥和空密码。
+- 子路径代理可能会影响后端页面中的资源路径。当前已处理常见的 `/abc1` 到 `/abc1/` 跳转、后端重定向路径和 Cookie Path 改写。
+- 如果后端页面硬编码了绝对资源路径，例如 `/assets/app.js`，优先让后端应用支持 base path；无法配置时建议使用独立子域名或端口代理。
+
+## 目录结构
 
 ```text
 .
-├─ AGENTS.md
-├─ .codex/
-│  └─ skills/
-├─ .vscode/
+├─ cmd/
+│  └─ localweb/
+│     └─ main.go
+├─ internal/
+│  ├─ auth/
+│  ├─ config/
+│  └─ server/
+├─ config.example.json
 ├─ docs/
 ├─ scripts/
 ├─ Bin/
 └─ temp/
 ```
 
-说明：
-
-- `AGENTS.md`：存放必须始终生效的 Codex 项目规则。
-- `.codex/skills/`：存放可迁移的项目 skill、功能 skill 和任务 skill。
-- `scripts/`：统一存放 Python 脚本，按用途再分一级目录。
-- `.vscode/`：存放编辑器任务与工作区辅助配置。
-- `docs/`：统一存放项目说明、设计和使用文档。
-- `Bin/`：统一存放构建、编译和打包后的最终产物。
-- `temp/`：统一存放测试运行、脚本执行等过程中产生的临时文件。
-
 ## 使用方式
 
-1. 将本仓库作为新项目的基础模板使用。
-2. 保留 `AGENTS.md` 和 `.codex/skills/`，把开发规范、命名规则、验证流程和重复工作流写入规则或 skill。
-3. 派生项目可以自由改写根目录 `README.md`，用于具体项目介绍、安装、使用或对外说明。
-4. 新增项目或子项目时创建或更新项目 skill；新增稳定功能或复杂工作流时创建或更新功能 skill 或任务 skill。
-5. 如果需要让 skill 在新设备上全局触发，把 `.codex/skills/<skill-name>/` 同步到 `$CODEX_HOME/skills/`；项目内仍保留源文件。
-6. 保留 `.gitignore`，再按项目技术栈增量扩展。
-7. 在根目录补充项目自己的源码、配置和测试目录。
-
-初始化脚本：
+复制示例配置：
 
 ```powershell
-python scripts/project/init_project.py <目标目录> --project-name "<项目名>" --project-slug <project-slug>
+Copy-Item config.example.json config.json
 ```
 
-规则校验：
+按需修改 `config.json` 后运行：
 
 ```powershell
-python scripts/validate/check_project_rules.py
+go run ./cmd/localweb -config config.json
 ```
 
-## 内置仓库任务
+配置里的 `port` 如果是 `80`，在 Linux 上通常需要 root 权限、`CAP_NET_BIND_SERVICE`，或放在 Nginx/Caddy 等前置服务后面监听高端口。
 
-仓库内提供一组基于 Python 的 VS Code 任务，定义在 `.vscode/tasks.json`，统一入口脚本为 `scripts/git/repo_tasks.py`。
+## 开发命令
 
-可用任务：
+测试：
 
-- `仓库：分支-[查看] 🔎`：按固定标签显示本地分支、远程分支、fetch/push 地址和作者信息；作者信息缺失且已配置远程源时，可通过 gh 登录账号自动补全。
-- `仓库：置远程源 🔗`：新增或更新远程源名称与仓库地址的绑定关系，并写入当前仓库默认远程源。
-- `仓库：远程-[拉取] ⬇️`：在终端输入远程分支名，使用当前仓库默认远程源拉取；未设置远程源时提示先执行“仓库：置远程源 🔗”。VS Code 任务会通过 `--yes` 在拉取前自动提交本地改动；直接运行脚本时默认先确认。同名分支优先合并，合并失败或分支不同则确认后覆盖拉取。
-- `仓库：本地-[切换] 🌿`：有远程源时先列出远程分支，无远程源时列出本地分支；输入编号选择分支，输入文本作为分支名。VS Code 任务会通过 `--yes` 在切换前自动提交当前改动；直接运行脚本时默认先确认。远程源已设置且远程分支存在时优先切换或同步远程分支，未设置远程源或远程分支不存在时仅创建或切换本地分支。
-- `仓库：本地-[提交] 📝`：先显示上次提交、本次改动和规则生成的中文默认提交说明；直接回车使用默认说明，手动输入则使用输入内容提交。
-- `仓库：远程-[推送] 🚀`：先列出远程分支并编号；输入编号选择远程分支，输入文本作为目标分支，直接回车使用当前分支。未设置远程源时提示先执行“仓库：置远程源 🔗”。远程分支不存在则自动创建并推送，已存在则普通推送；推送失败时显示本地/远程提交说明差异，并输入 `Y` 或 `yes` 确认是否强推覆盖。
-- `仓库：本地-[还原] ↩️`：倒序分页列出最近提交点，输入编号并二次确认后执行 `git reset --hard` 还原到目标节点；输入 `0` 查看更早的 10 个提交点，直接回车取消。
+```powershell
+go test ./...
+```
 
-任务特性：
+发布编译 Ubuntu/Linux amd64：
 
-- 统一使用 Python 脚本实现，便于后续扩展和维护。
-- 任务输出自带时间戳、开始时间、结束时间和总耗时。
-- VS Code 任务不使用 `promptString`，所有必要输入统一在任务终端内完成。
-- 推送与拉取等长耗时操作支持实时输出，便于观察执行进度。
-- 远程源是当前本地仓库级设置，保存在 Git 配置中；运行“仓库：置远程源 🔗”后，推送、拉取和切换分支会默认使用该源。
-- 提交任务按路径语义生成默认中文提交说明；新增重要目录、任务脚本或 skill 时，需要同步维护 `scripts/git/repo_tasks.py` 中的路径语义映射。
+```powershell
+python scripts/build/build_localweb.py
+```
 
-注意事项：
+VS Code 任务 `发布：编译LocalWeb` 会设置 `GOOS=linux`、`GOARCH=amd64`、`CGO_ENABLED=0`，编译 `Bin/localweb/localweb`，并把 `config.example.json` 一起复制到 `Bin/localweb/`。
 
-- 强推前必须确认本地和远程分支状态，避免覆盖他人提交。
-- 直接运行脚本执行切换或拉取时，自动提交前需要确认；VS Code 任务已显式传入 `--yes` 保持任务模式自动提交。
-- 覆盖式拉取、强推和节点还原都必须经过终端二次确认，默认直接回车会取消。
+等价 Go 命令：
 
-## 文档入口
+```powershell
+$env:GOOS = "linux"
+$env:GOARCH = "amd64"
+$env:CGO_ENABLED = "0"
+go build -o Bin/localweb/localweb ./cmd/localweb
+```
 
-- `docs/README.md`
-- `docs/codex/README.md`
-- `scripts/README.md`
+## 当前能力
+
+- Go module 和基础目录已初始化。
+- 已实现 `config.json` 解析、默认值填充和启动校验。
+- 已实现明文密码、环境变量密码和 SHA-256 密码摘要验证。
+- 已实现 JWT 签发、JWT 校验和 HttpOnly Cookie 写入。
+- 已实现路径级反向代理，支持 `strip_path_prefix`。
+- 已实现路由根路径末尾斜杠跳转、后端重定向路径改写和 Cookie Path 改写。
+- 已支持 WebSocket Upgrade 转发。
+- 已实现登录限流、基础错误处理和代理错误日志。
+- 已增加配置解析、JWT、路由匹配和登录代理流程测试。
+
+## 后续计划
+
+- 支持 bcrypt/argon2id 密码哈希。
+- 增加更完整的访问日志和审计日志。
+- 增加可选登出接口。
+- 增加 systemd、Docker 和反向代理部署示例。
+- 视需要支持响应内容重写，解决部分后端应用不支持 base path 的问题。
+
+## 安全建议
+
+- 生产环境不要长期使用明文 `password`，优先用 `password_env`，后续计划支持 bcrypt/argon2id 哈希。
+- `jwt.secret` 不要提交到公开仓库，可通过环境变量或独立私有配置注入。
+- 若公网使用，建议放在 HTTPS 后面，并开启 `cookie_secure`。
+- 本项目只适合作为轻量认证层，不替代完整的身份系统、权限系统或零信任网关。
