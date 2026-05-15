@@ -1,0 +1,130 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: windows
+            arch: amd64
+            suffix: .exe
+          - os: linux
+            arch: amd64
+            suffix: ''
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Build ${{ matrix.os }} ${{ matrix.arch }}
+        env:
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p "Bin/localweb-${{ matrix.os }}-${{ matrix.arch }}"
+          go build -o "Bin/localweb-${{ matrix.os }}-${{ matrix.arch }}/localweb${{ matrix.suffix }}" ./cmd/localweb
+          cp config.example.json "Bin/localweb-${{ matrix.os }}-${{ matrix.arch }}/config.example.json"
+
+      - name: Create archive
+        run: |
+          cd Bin
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            zip -r "localweb-${{ matrix.os }}-${{ matrix.arch }}.zip" "localweb-${{ matrix.os }}-${{ matrix.arch }}"
+          else
+            tar -czf "localweb-${{ matrix.os }}-${{ matrix.arch }}.tar.gz" "localweb-${{ matrix.os }}-${{ matrix.arch }}"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: localweb-${{ matrix.os }}-${{ matrix.arch }}
+          path: Bin/localweb-${{ matrix.os }}-${{ matrix.arch }}/
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Create archives
+        run: |
+          mkdir -p release
+          cd artifacts
+          
+          if [ -d "localweb-windows-amd64" ]; then
+            zip -r "../release/localweb-windows-amd64.zip" "localweb-windows-amd64"
+          fi
+          
+          if [ -d "localweb-linux-amd64" ]; then
+            tar -czf "../release/localweb-linux-amd64.tar.gz" "localweb-linux-amd64"
+          fi
+
+      - name: Generate release notes
+        id: release_notes
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          [ -z "$VERSION" ] && VERSION="${{ github.event.inputs.version }}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "## 📦 Release $VERSION" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "### Download" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "- **Windows (amd64)**: \`localweb-windows-amd64.zip\`" >> $GITHUB_OUTPUT
+          echo "- **Linux (amd64)**: \`localweb-linux-amd64.tar.gz\`" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "### Quick Start" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "\`\`\`bash" >> $GITHUB_OUTPUT
+          echo "# Extract" >> $GITHUB_OUTPUT
+          echo "unzip localweb-windows-amd64.zip" >> $GITHUB_OUTPUT
+          echo "tar -xzf localweb-linux-amd64.tar.gz" >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "# Run" >> $GITHUB_OUTPUT
+          echo "./localweb-windows-amd64/localweb.exe -config config.json" >> $GITHUB_OUTPUT
+          echo "./localweb-linux-amd64/localweb -config config.json" >> $GITHUB_OUTPUT
+          echo "\`\`\`" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.release_notes.outputs.version }}
+          name: Release ${{ steps.release_notes.outputs.version }}
+          body: ${{ steps.release_notes.outputs.notes }}
+          files: |
+            release/localweb-windows-amd64.zip
+            release/localweb-linux-amd64.tar.gz
+          draft: false
+          prerelease: false
